@@ -40,9 +40,11 @@ class ExportConfig:
         options.make_skinned_meshes_root = True
 
         # Material handling: bake UE node-graph materials to PBR textures
-        options.bake_material_inputs = unreal.GLTFMaterialBakeMode.ENABLED
+        # GLTFMaterialBakeMode: DISABLED, SIMPLE, USE_MESH_DATA
+        options.bake_material_inputs = unreal.GLTFMaterialBakeMode.SIMPLE
 
         # Texture settings
+        # GLTFTextureImageFormat: NONE, PNG, JPEG
         options.texture_image_format = unreal.GLTFTextureImageFormat.PNG
 
         # Include preview mesh when exporting standalone animations
