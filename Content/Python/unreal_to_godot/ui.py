@@ -23,9 +23,8 @@ def show_export_dialog():
 
     Workflow:
     1. Get selected assets from Content Browser
-    2. Show asset summary and ask for confirmation
-    3. Pick output directory
-    4. Run export
+    2. Show asset summary with output path and ask for confirmation
+    3. Run export
     """
     # Get selected assets
     selected_assets = unreal.EditorUtilityLibrary.get_selected_assets()
@@ -41,13 +40,17 @@ def show_export_dialog():
         )
         return
 
+    # Determine output directory
+    output_dir = _get_output_directory()
+
     # Categorize and summarize selected assets
     summary = _build_asset_summary(list(selected_assets))
 
-    # Show confirmation dialog with asset summary
+    # Show confirmation dialog with asset summary and output path
     confirm_msg = (
         f"Ready to export {len(selected_assets)} asset(s) to Godot:\n\n"
         f"{summary}\n\n"
+        f"Output directory:\n{output_dir}\n\n"
         "The exporter will:\n"
         "- Convert to glTF 2.0 format (Godot compatible)\n"
         "- Include materials and textures automatically\n"
@@ -65,11 +68,6 @@ def show_export_dialog():
     if result != unreal.AppReturnType.YES:
         return
 
-    # Pick output directory
-    output_dir = _pick_output_directory()
-    if not output_dir:
-        return
-
     # Configure and run export
     config = ExportConfig()
     config.output_directory = output_dir
@@ -78,11 +76,19 @@ def show_export_dialog():
     config.organize_by_type = True
     config.generate_manifest = True
 
-    exporter = GodotExporter(config)
-    report = exporter.export_assets(list(selected_assets), output_dir)
+    try:
+        exporter = GodotExporter(config)
+        report = exporter.export_assets(list(selected_assets), output_dir)
 
-    # Show result dialog
-    _show_result_dialog(report, output_dir)
+        # Show result dialog
+        _show_result_dialog(report, output_dir)
+    except Exception as e:
+        unreal.log_error(f"UnrealToGodot: Export failed - {e}")
+        unreal.EditorDialog.show_message(
+            "Export Failed",
+            f"An error occurred during export:\n\n{e}",
+            unreal.AppMsgType.OK,
+        )
 
 
 def _build_asset_summary(assets):
@@ -133,31 +139,15 @@ def _build_asset_summary(assets):
     return "\n".join(lines)
 
 
-def _pick_output_directory():
-    """Open a directory picker dialog and return the selected path."""
-    default_path = os.path.join(
-        unreal.Paths.project_dir(), "GodotExport"
-    )
-
-    selected = unreal.EditorUtilityLibrary.pick_directory(
-        "Select Export Output Directory",
-        default_path,
-    )
-
-    if selected:
-        return selected
-
-    # Fallback: use the default path
-    result = unreal.EditorDialog.show_message(
-        "Unreal To Godot Exporter",
-        f"Use default export directory?\n\n{default_path}",
-        unreal.AppMsgType.YES_NO,
-    )
-
-    if result == unreal.AppReturnType.YES:
-        return default_path
-
-    return None
+def _get_output_directory():
+    """
+    Get the output directory for export.
+    Uses {ProjectDir}/GodotExport/ as the default.
+    """
+    project_dir = unreal.Paths.project_dir()
+    # Convert to absolute path for clarity
+    abs_project_dir = unreal.Paths.convert_relative_path_to_full(project_dir)
+    return os.path.join(abs_project_dir, "GodotExport")
 
 
 def _show_result_dialog(report, output_dir):
