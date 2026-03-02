@@ -1,0 +1,32 @@
+{
+    "FileVersion": 3,
+    "Version": 1,
+    "VersionName": "1.0.0",
+    "FriendlyName": "Unreal To Godot Exporter",
+    "Description": "Export Unreal Engine assets (Static Mesh, Skeletal Mesh, Animation) to Godot Engine via glTF 2.0",
+    "Category": "Pipeline",
+    "CreatedBy": "siyoon",
+    "CreatedByURL": "",
+    "DocsURL": "",
+    "MarketplaceURL": "",
+    "SupportURL": "",
+    "EnabledByDefault": false,
+    "CanContainContent": true,
+    "IsBetaVersion": true,
+    "IsExperimentalVersion": false,
+    "Installed": false,
+    "Plugins": [
+        {
+            "Name": "PythonScriptPlugin",
+            "Enabled": true
+        },
+        {
+            "Name": "EditorScriptingUtilities",
+            "Enabled": true
+        },
+        {
+            "Name": "GLTFExporter",
+            "Enabled": true
+        }
+    ]
+}
