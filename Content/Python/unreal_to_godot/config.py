@@ -23,6 +23,7 @@ class ExportConfig:
         self.generate_manifest = True  # Create manifest.json with export info
         self.include_dependencies = True  # Auto-include materials/textures
         self.include_preview_mesh_with_anim = True  # Export preview mesh with animations
+        self.export_textures_as_png = True  # Also export textures as separate PNG files
         self.overwrite_existing = False
 
     def create_gltf_options(self):

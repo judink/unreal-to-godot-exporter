@@ -54,6 +54,7 @@ def show_export_dialog():
         "The exporter will:\n"
         "- Convert to glTF 2.0 format (Godot compatible)\n"
         "- Include materials and textures automatically\n"
+        "- Export textures as separate PNG files\n"
         "- Include skeletons for skeletal meshes/animations\n"
         "- Organize output by asset type\n\n"
         "Continue?"

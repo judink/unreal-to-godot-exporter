@@ -176,7 +176,7 @@ class GodotExporter:
         asset_name = asset.get_name()
         asset_type = type(asset).__name__
 
-        # Resolve dependencies (for logging purposes; glTF exporter bundles them)
+        # Resolve dependencies
         dep_info = self.resolver.resolve(asset)
 
         # Determine output path
@@ -214,6 +214,15 @@ class GodotExporter:
 
             if success:
                 unreal.log(f"UnrealToGodot: Exported '{asset_name}' -> {output_path}")
+
+                # Export textures as separate PNG files
+                if self.config.export_textures_as_png and dep_info.textures:
+                    tex_dir = os.path.join(output_dir, "Textures")
+                    exported_count = self._export_textures_as_png(
+                        dep_info.textures, tex_dir
+                    )
+                    if exported_count > 0:
+                        messages.append(f"Exported {exported_count} texture(s) as PNG")
             else:
                 messages.append("Export completed but output file not found")
 
@@ -249,6 +258,51 @@ class GodotExporter:
         parts.append(f"{asset_name}{ext}")
 
         return os.path.join(*parts)
+
+    def _export_textures_as_png(self, textures, output_dir):
+        """
+        Export texture assets as separate PNG files.
+
+        Args:
+            textures: List of Texture assets
+            output_dir: Directory to save PNG files
+
+        Returns:
+            Number of successfully exported textures
+        """
+        os.makedirs(output_dir, exist_ok=True)
+        exported = 0
+
+        for texture in textures:
+            tex_name = texture.get_name()
+            png_path = os.path.join(output_dir, f"{tex_name}.png")
+
+            if os.path.exists(png_path) and not self.config.overwrite_existing:
+                exported += 1
+                continue
+
+            try:
+                task = unreal.AssetExportTask()
+                task.object = texture
+                task.filename = png_path
+                task.automated = True
+                task.replace_identical = True
+                task.prompt = False
+
+                success = unreal.Exporter.run_asset_export_task(task)
+                if success:
+                    exported += 1
+                    unreal.log(f"UnrealToGodot: Texture '{tex_name}' -> {png_path}")
+                else:
+                    unreal.log_warning(
+                        f"UnrealToGodot: Failed to export texture '{tex_name}'"
+                    )
+            except Exception as e:
+                unreal.log_warning(
+                    f"UnrealToGodot: Error exporting texture '{tex_name}': {e}"
+                )
+
+        return exported
 
     def _parse_export_messages(self, export_messages):
         """Extract message strings from GLTFExportMessages."""
