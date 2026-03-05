@@ -97,6 +97,7 @@ def _build_asset_summary(assets):
     static_meshes = []
     skeletal_meshes = []
     animations = []
+    textures = []
     unsupported = []
 
     for asset in assets:
@@ -107,6 +108,8 @@ def _build_asset_summary(assets):
             skeletal_meshes.append(name)
         elif isinstance(asset, unreal.AnimSequence):
             animations.append(name)
+        elif isinstance(asset, unreal.Texture2D):
+            textures.append(name)
         else:
             unsupported.append(f"{name} ({type(asset).__name__})")
 
@@ -131,6 +134,13 @@ def _build_asset_summary(assets):
             lines.append(f"  - {name}")
         if len(animations) > 5:
             lines.append(f"  ... and {len(animations) - 5} more")
+
+    if textures:
+        lines.append(f"Textures ({len(textures)}):")
+        for name in textures[:5]:
+            lines.append(f"  - {name}")
+        if len(textures) > 5:
+            lines.append(f"  ... and {len(textures) - 5} more")
 
     if unsupported:
         lines.append(f"Unsupported (will be skipped) ({len(unsupported)}):")

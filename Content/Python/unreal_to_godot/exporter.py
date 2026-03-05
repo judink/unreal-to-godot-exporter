@@ -79,6 +79,7 @@ class GodotExporter:
         "StaticMesh": "StaticMeshes",
         "SkeletalMesh": "SkeletalMeshes",
         "AnimSequence": "Animations",
+        "Texture2D": "Textures",
     }
 
     def __init__(self, config=None):
@@ -122,7 +123,7 @@ class GodotExporter:
         # Filter to supported asset types
         supported_assets = []
         for asset in assets:
-            if isinstance(asset, (unreal.StaticMesh, unreal.SkeletalMesh, unreal.AnimSequence)):
+            if isinstance(asset, (unreal.StaticMesh, unreal.SkeletalMesh, unreal.AnimSequence, unreal.Texture2D)):
                 supported_assets.append(asset)
             else:
                 type_name = type(asset).__name__
@@ -175,6 +176,10 @@ class GodotExporter:
         """
         asset_name = asset.get_name()
         asset_type = type(asset).__name__
+
+        # Handle Texture2D directly as PNG export
+        if isinstance(asset, unreal.Texture2D):
+            return self._export_single_texture(asset)
 
         # Resolve dependencies
         dep_info = self.resolver.resolve(asset)
@@ -258,6 +263,59 @@ class GodotExporter:
         parts.append(f"{asset_name}{ext}")
 
         return os.path.join(*parts)
+
+    def _export_single_texture(self, texture):
+        """
+        Export a single Texture2D asset as PNG.
+
+        Args:
+            texture: A Texture2D asset
+
+        Returns:
+            ExportResult
+        """
+        tex_name = texture.get_name()
+        asset_type = "Texture2D"
+
+        # Build output path: Textures/T_Name/T_Name.png
+        parts = [self.config.output_directory]
+        if self.config.organize_by_type:
+            parts.append("Textures")
+        parts.append(tex_name)
+        parts.append(f"{tex_name}.png")
+        output_path = os.path.join(*parts)
+
+        output_dir = os.path.dirname(output_path)
+        os.makedirs(output_dir, exist_ok=True)
+
+        if os.path.exists(output_path) and not self.config.overwrite_existing:
+            return ExportResult(
+                tex_name, asset_type, False, output_path,
+                messages=["File already exists (overwrite disabled)"]
+            )
+
+        try:
+            task = unreal.AssetExportTask()
+            task.object = texture
+            task.filename = output_path
+            task.automated = True
+            task.replace_identical = True
+            task.prompt = False
+
+            success = unreal.Exporter.run_asset_export_task(task)
+            if success:
+                unreal.log(f"UnrealToGodot: Texture '{tex_name}' -> {output_path}")
+                return ExportResult(tex_name, asset_type, True, output_path)
+            else:
+                return ExportResult(
+                    tex_name, asset_type, False, output_path,
+                    messages=["AssetExportTask returned false"]
+                )
+        except Exception as e:
+            return ExportResult(
+                tex_name, asset_type, False, output_path,
+                messages=[str(e)]
+            )
 
     def _export_textures_as_png(self, textures, output_dir):
         """
