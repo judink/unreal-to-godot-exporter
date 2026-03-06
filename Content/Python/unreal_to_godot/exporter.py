@@ -267,6 +267,7 @@ class GodotExporter:
     def _export_single_texture(self, texture):
         """
         Export a single Texture2D asset as PNG.
+        Tries multiple export methods if the first one fails.
 
         Args:
             texture: A Texture2D asset
@@ -294,6 +295,54 @@ class GodotExporter:
                 messages=["File already exists (overwrite disabled)"]
             )
 
+        # Try export with explicit PNG exporter first, then TGA fallback
+        success = self._try_export_texture(texture, output_path)
+
+        if not success:
+            # Fallback: export as TGA then note it
+            tga_path = output_path.replace(".png", ".tga")
+            success = self._try_export_texture(texture, tga_path)
+            if success:
+                output_path = tga_path
+                unreal.log(
+                    f"UnrealToGodot: Texture '{tex_name}' exported as TGA (PNG failed)"
+                )
+
+        if success:
+            unreal.log(f"UnrealToGodot: Texture '{tex_name}' -> {output_path}")
+            return ExportResult(tex_name, asset_type, True, output_path)
+
+        # All methods failed - try glTF export as last resort
+        glb_path = output_path.replace(".png", ".glb")
+        try:
+            gltf_options = self.config.create_gltf_options()
+            unreal.GLTFExporter.export_to_gltf(texture, glb_path, gltf_options, set())
+            if os.path.exists(glb_path):
+                unreal.log(
+                    f"UnrealToGodot: Texture '{tex_name}' exported as glTF (PNG/TGA failed)"
+                )
+                return ExportResult(tex_name, asset_type, True, glb_path,
+                    messages=["Exported as glTF (PNG export not supported for this texture)"]
+                )
+        except Exception:
+            pass
+
+        return ExportResult(
+            tex_name, asset_type, False, output_path,
+            messages=["All export methods failed. Texture may be virtual or have unsupported compression."]
+        )
+
+    def _try_export_texture(self, texture, output_path):
+        """
+        Try to export a texture using AssetExportTask.
+
+        Args:
+            texture: A Texture2D asset
+            output_path: Destination file path (.png or .tga)
+
+        Returns:
+            True if export succeeded
+        """
         try:
             task = unreal.AssetExportTask()
             task.object = texture
@@ -302,20 +351,27 @@ class GodotExporter:
             task.replace_identical = True
             task.prompt = False
 
-            success = unreal.Exporter.run_asset_export_task(task)
-            if success:
-                unreal.log(f"UnrealToGodot: Texture '{tex_name}' -> {output_path}")
-                return ExportResult(tex_name, asset_type, True, output_path)
-            else:
-                return ExportResult(
-                    tex_name, asset_type, False, output_path,
-                    messages=["AssetExportTask returned false"]
-                )
+            # Try to find and set explicit exporter based on extension
+            ext = os.path.splitext(output_path)[1].lower()
+            if ext == ".png":
+                try:
+                    task.exporter = unreal.TextureExporterPNG()
+                except Exception:
+                    pass  # Let UE auto-detect
+            elif ext == ".tga":
+                try:
+                    task.exporter = unreal.TextureExporterTGA()
+                except Exception:
+                    pass
+
+            result = unreal.Exporter.run_asset_export_task(task)
+            return result and os.path.exists(output_path)
         except Exception as e:
-            return ExportResult(
-                tex_name, asset_type, False, output_path,
-                messages=[str(e)]
+            unreal.log_warning(
+                f"UnrealToGodot: Export attempt failed for '{texture.get_name()}' "
+                f"to {output_path}: {e}"
             )
+            return False
 
     def _export_textures_as_png(self, textures, output_dir):
         """
@@ -339,26 +395,21 @@ class GodotExporter:
                 exported += 1
                 continue
 
-            try:
-                task = unreal.AssetExportTask()
-                task.object = texture
-                task.filename = png_path
-                task.automated = True
-                task.replace_identical = True
-                task.prompt = False
-
-                success = unreal.Exporter.run_asset_export_task(task)
-                if success:
+            # Try PNG first, then TGA fallback
+            if self._try_export_texture(texture, png_path):
+                exported += 1
+                unreal.log(f"UnrealToGodot: Texture '{tex_name}' -> {png_path}")
+            else:
+                tga_path = os.path.join(output_dir, f"{tex_name}.tga")
+                if self._try_export_texture(texture, tga_path):
                     exported += 1
-                    unreal.log(f"UnrealToGodot: Texture '{tex_name}' -> {png_path}")
+                    unreal.log(
+                        f"UnrealToGodot: Texture '{tex_name}' -> {tga_path} (TGA fallback)"
+                    )
                 else:
                     unreal.log_warning(
                         f"UnrealToGodot: Failed to export texture '{tex_name}'"
                     )
-            except Exception as e:
-                unreal.log_warning(
-                    f"UnrealToGodot: Error exporting texture '{tex_name}': {e}"
-                )
 
         return exported
 
